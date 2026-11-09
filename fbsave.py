@@ -14,6 +14,7 @@ dokumentiert sie:
   - comment_NNN.png               Einzel-Screenshot pro Kommentar/Antwort
   - full_page.png                 Gesamt-Screenshot der aufgefalteten Seite
   - comments.csv                  author, profile_url, timestamps, text, ...
+  - comments.json                 dieselben Kommentardaten als JSON-Array
   - manifest.json                 UTC-Zeitstempel des Laufs + SHA256 aller Dateien
 
 Mit --debug zusaetzlich:
@@ -784,7 +785,7 @@ def extract_comments(page, scope, rows, seen, outdir: Path,
 
 
 # ---------------------------------------------------------------------------
-# Ausgabe: CSV + Manifest
+# Ausgabe: CSV + JSON + Manifest
 # ---------------------------------------------------------------------------
 
 CSV_FIELDS = ["index", "comment_id", "is_reply", "parent_id", "parent_author",
@@ -807,6 +808,10 @@ def write_outputs(outdir: Path, rows, manifest: dict) -> None:
         writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
         writer.writeheader()
         writer.writerows(rows)
+
+    json_path = outdir / "comments.json"
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(rows, f, ensure_ascii=False, indent=2)
 
     manifest["comment_count"] = len(rows)
     manifest["timestamp_sources"] = {
@@ -840,6 +845,7 @@ def write_outputs(outdir: Path, rows, manifest: dict) -> None:
     ui.say()
     ui.say(f"📁 Ordner:       {outdir}/")
     ui.say(f"📄 Tabelle:      {csv_path}")
+    ui.say(f"📄 JSON:         {json_path}")
     ui.say(f"🖼️  Screenshots:  {shots} × comment_NNN.png + full_page.png")
     ui.say(f"🔏 Manifest:     {outdir / 'manifest.json'} "
            f"(UTC-Zeitstempel + SHA256-Hashes)")
@@ -1013,7 +1019,7 @@ def main() -> int:
     global ui
     ap = argparse.ArgumentParser(
         description="Dokumentiert alle Kommentare unter einem oeffentlichen "
-                    "Facebook-Post (Screenshots + CSV + Manifest).")
+                    "Facebook-Post (Screenshots + CSV + JSON + Manifest).")
     ap.add_argument("--url", default=DEFAULT_URL, help="URL des Facebook-Posts")
     ap.add_argument("--headless", action="store_true",
                     help="Browser unsichtbar laufen lassen (Standard: sichtbar)")

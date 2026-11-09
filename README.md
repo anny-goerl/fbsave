@@ -2,7 +2,7 @@
 
 Dokumentiert alle Kommentare (inkl. Antworten und Antworten auf Antworten)
 unter einem öffentlichen Facebook-Post für eine Strafanzeige: Einzel-Screenshot
-pro Kommentar, Gesamt-Screenshot, CSV mit Autor/Profillink/Zeitstempel/Text
+pro Kommentar, Gesamt-Screenshot, CSV und JSON mit Autor/Profillink/Zeitstempel/Text
 sowie ein `manifest.json` mit UTC-Zeitstempeln des Laufs und SHA256-Hashes
 aller Dateien.
 
@@ -69,6 +69,7 @@ gesichert wurde und wo es liegt:
 
 📁 Ordner:       captures/capture_20260610T120301Z/
 📄 Tabelle:      captures/capture_20260610T120301Z/comments.csv
+📄 JSON:         captures/capture_20260610T120301Z/comments.json
 🖼️  Screenshots:  187 × comment_NNN.png + full_page.png
 🔏 Manifest:     captures/capture_20260610T120301Z/manifest.json (UTC-Zeitstempel + SHA256-Hashes)
 ```
@@ -99,6 +100,7 @@ nicht weitergeben (steht in `.gitignore`).
 | Datei | Inhalt |
 |---|---|
 | `comments.csv` | `index, comment_id, is_reply, parent_id, parent_author, author, profile_url, timestamp_raw, timestamp_utc, timestamp_source, text, attachment_alt, screenshot_file, aria_label` (UTF-8-BOM, Excel-tauglich) |
+| `comments.json` | JSON-Array mit denselben Kommentaren, Antworten und Feldern wie in `comments.csv` (UTF-8, zwei Leerzeichen Einrückung) |
 | `comment_NNN.png` | Einzel-Screenshot pro Kommentar/Antwort |
 | `full_page.png`, `full_dialog.png` | Gesamt-Screenshots |
 | `manifest.json` | URLs, Seitentitel, Start/Ende UTC, Versionen, Zähler, SHA256 jeder Datei |
@@ -132,7 +134,7 @@ dumpt (`probe_out/`), ohne eine Beweissicherung zu erzeugen.
 - **Sortierung:** Wenn das Umstellen auf „Alle Kommentare" fehlschlägt, warnt
   das Skript — dann können von Facebook ausgeblendete Kommentare fehlen
   (`manifest.json: sorted_to_all_comments`).
-- Auch bei Fehlern/Abbruch (Strg-C) werden CSV und Manifest mit den bis dahin
+- Auch bei Fehlern/Abbruch (Strg-C) werden CSV, JSON und Manifest mit den bis dahin
   gesammelten Daten geschrieben.
 - Facebook ändert sein Markup regelmäßig. Wenn ein Lauf 0 Kommentare liefert:
   mit `--debug` erneut laufen lassen — `debug_structure_*.json` und die
