@@ -100,10 +100,16 @@ nicht weitergeben (steht in `.gitignore`).
 | Datei | Inhalt |
 |---|---|
 | `comments.csv` | `index, comment_id, is_reply, parent_id, parent_author, author, profile_url, timestamp_raw, timestamp_utc, timestamp_source, text, attachment_alt, screenshot_file, aria_label` (UTF-8-BOM, Excel-tauglich) |
-| `comments.json` | JSON-Array mit denselben Kommentaren, Antworten und Feldern wie in `comments.csv` (UTF-8, zwei Leerzeichen Einrückung) |
+| `comments.json` | JSON-Array mit allen Feldern aus `comments.csv` und verschachtelten Antworten in `replies` (UTF-8, zwei Leerzeichen Einrückung) |
 | `comment_NNN.png` | Einzel-Screenshot pro Kommentar/Antwort |
 | `full_page.png`, `full_dialog.png` | Gesamt-Screenshots |
 | `manifest.json` | URLs, Seitentitel, Start/Ende UTC, Versionen, Zähler, SHA256 jeder Datei |
+
+In `comments.json` enthält `replies` die direkten Antworten eines Eintrags.
+Antworten auf Antworten haben wiederum ein eigenes `replies`-Array. Wenn die
+`parent_id` fehlt, der Elternkommentar nicht erfasst wurde oder `parent_author`
+dem Autor der gefundenen Zeile widerspricht, bleibt die Antwort auf oberster
+Ebene. `index` verweist weiterhin auf ihre Position in `comments.csv`.
 
 ### Debug-Dateien (nur mit `--debug`, ebenfalls gehasht)
 

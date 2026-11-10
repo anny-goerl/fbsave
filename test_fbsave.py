@@ -8,7 +8,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from fbsave import CSV_FIELDS, write_outputs
+from fbsave import CSV_FIELDS, build_comment_tree, write_outputs
 
 
 class WriteOutputsTest(unittest.TestCase):
@@ -36,7 +36,13 @@ class WriteOutputsTest(unittest.TestCase):
             attachment_alt="", screenshot_file="",
             aria_label="Antwort von Zoë an Jörg Öster",
         )
-        rows = [comment, reply]
+        nested_reply = dict(
+            reply, index=3, comment_id="00125", parent_id=reply["comment_id"],
+            parent_author=reply["author"], author="Clara", text="Danke!",
+            profile_url="https://example.test/clara",
+            aria_label="Antwort von Clara auf Zoës Antwort",
+        )
+        rows = [comment, reply, nested_reply]
 
         with TemporaryDirectory() as directory, redirect_stdout(io.StringIO()) as output:
             outdir = Path(directory)
@@ -53,8 +59,16 @@ class WriteOutputsTest(unittest.TestCase):
             json_bytes = json_path.read_bytes()
             json_text = json_bytes.decode("utf-8")
             json_rows = json.loads(json_text)
-            self.assertEqual(json_rows, rows)
-            self.assertEqual(csv_rows, [dict(row, index=str(row["index"])) for row in json_rows])
+            self.assertEqual(json_rows, [dict(comment, replies=[
+                dict(reply, replies=[dict(nested_reply, replies=[])]),
+            ])])
+            json_thread = [json_rows[0], json_rows[0]["replies"][0],
+                           json_rows[0]["replies"][0]["replies"][0]]
+            self.assertEqual(csv_rows, [
+                {field: str(node[field]) for field in CSV_FIELDS}
+                for node in json_thread
+            ])
+            self.assertTrue(all("replies" not in row for row in rows))
             self.assertIn("Grüße", json_text)
             self.assertIn("👋", json_text)
             self.assertTrue(json_text.startswith("[\n  {\n"))
@@ -63,6 +77,32 @@ class WriteOutputsTest(unittest.TestCase):
             self.assertEqual(manifest["files_sha256"]["comments.json"],
                              hashlib.sha256(json_bytes).hexdigest())
             self.assertIn(f"📄 JSON:         {json_path}", output.getvalue())
+
+    def test_tree_keeps_replies_with_missing_or_conflicting_parents(self):
+        comment = dict(index=1, comment_id="1", is_reply="nein", parent_id="",
+                       author="Anna", parent_author="")
+        reply = dict(index=2, comment_id="2", is_reply="ja", parent_id="1",
+                     author="Ben", parent_author="Anna")
+        conflicting = dict(index=3, comment_id="3", is_reply="ja", parent_id="1",
+                           author="Clara", parent_author="Ben")
+        orphan = dict(index=4, comment_id="4", is_reply="ja", parent_id="9",
+                      author="David", parent_author="Eva")
+
+        self.assertEqual(build_comment_tree([reply, comment, conflicting, orphan]), [
+            dict(comment, replies=[dict(reply, replies=[])]),
+            dict(conflicting, replies=[]),
+            dict(orphan, replies=[]),
+        ])
+
+    def test_tree_breaks_cyclic_parent_links(self):
+        first = dict(index=1, comment_id="1", is_reply="ja", parent_id="2",
+                     author="Anna", parent_author="Ben")
+        second = dict(index=2, comment_id="2", is_reply="ja", parent_id="1",
+                      author="Ben", parent_author="Anna")
+
+        self.assertEqual(build_comment_tree([first, second]), [
+            dict(second, replies=[dict(first, replies=[])]),
+        ])
 
     def test_empty_capture_writes_empty_json_array(self):
         with TemporaryDirectory() as directory, redirect_stdout(io.StringIO()):

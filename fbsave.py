@@ -14,7 +14,7 @@ dokumentiert sie:
   - comment_NNN.png               Einzel-Screenshot pro Kommentar/Antwort
   - full_page.png                 Gesamt-Screenshot der aufgefalteten Seite
   - comments.csv                  author, profile_url, timestamps, text, ...
-  - comments.json                 dieselben Kommentardaten als JSON-Array
+  - comments.json                 Kommentardaten als Baum mit verschachtelten Antworten
   - manifest.json                 UTC-Zeitstempel des Laufs + SHA256 aller Dateien
 
 Mit --debug zusaetzlich:
@@ -802,6 +802,38 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
+def build_comment_tree(rows) -> list:
+    nodes = [dict(row, replies=[]) for row in rows]
+    by_id = {node["comment_id"]: node for node in nodes if node["comment_id"]}
+    parents_by_index = {}
+    roots = []
+
+    for node in nodes:
+        parent = by_id.get(node["parent_id"])
+        if node["is_reply"] != "ja" or parent is None:
+            roots.append(node)
+            continue
+
+        # Der Link kann auf den Hauptkommentar zeigen, das Label auf eine Antwort.
+        parent_author = node["parent_author"].rstrip("'’")
+        if parent_author and parent_author != parent["author"].rstrip("'’"):
+            roots.append(node)
+            continue
+
+        # Verhindert eine Schleife bei widerspruechlichen Eltern-IDs.
+        ancestor = parent
+        while ancestor is not None and ancestor is not node:
+            ancestor = parents_by_index.get(ancestor["index"])
+        if ancestor is node:
+            roots.append(node)
+            continue
+
+        parent["replies"].append(node)
+        parents_by_index[node["index"]] = parent
+
+    return roots
+
+
 def write_outputs(outdir: Path, rows, manifest: dict) -> None:
     csv_path = outdir / "comments.csv"
     with open(csv_path, "w", newline="", encoding="utf-8-sig") as f:
@@ -811,7 +843,7 @@ def write_outputs(outdir: Path, rows, manifest: dict) -> None:
 
     json_path = outdir / "comments.json"
     with open(json_path, "w", encoding="utf-8") as f:
-        json.dump(rows, f, ensure_ascii=False, indent=2)
+        json.dump(build_comment_tree(rows), f, ensure_ascii=False, indent=2)
 
     manifest["comment_count"] = len(rows)
     manifest["timestamp_sources"] = {
