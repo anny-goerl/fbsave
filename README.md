@@ -61,7 +61,7 @@ gesichert wurde und wo es liegt:
 🎯 Post: https://www.facebook.com/...
 🍪 Cookie-Hinweis bestätigt
 ↕️  Sortierung umgestellt auf: Alle Kommentare
-✅ Alles aufgefaltet — 214 Kommentar-Elemente sichtbar (38 Runden)
+✅ Keine weiteren Kommentare nachgeladen — 214 Kommentar-Elemente sichtbar (38 Runden)
 ✅ 187 Kommentare/Antworten erfasst
 
 📊 Ergebnis: 187 Beiträge gesichert — 142 Kommentare, 45 Antworten
@@ -88,8 +88,9 @@ nicht weitergeben (steht in `.gitignore`).
 2. Cookie-Consent wegklicken, falls vorhanden (nur ohne Login), danach neu laden
 3. Kommentar-Sortierung auf **„Alle Kommentare"** umstellen (sonst blendet
    „Relevanteste zuerst" Kommentare aus!)
-4. Auffalt-Schleife: „Weitere Kommentare ansehen", „Alle X Antworten ansehen",
-   „Mehr anzeigen" (abgeschnittene Texte) — bis nichts mehr nachlädt
+4. „Weitere Kommentare ansehen", „Alle X Antworten ansehen" und „Mehr anzeigen"
+   anklicken und bis ans Ende der Kommentarliste scrollen, bis keine weiteren
+   Kommentare und Antworten nachladen
 5. Gesamt-Screenshots, dann Extraktion pro `role=article`:
    Autor + Relativzeit aus `aria-label`, Profillink, Kommentar-ID aus den
    Links, Text, Bild-Alt-Texte, Einzel-Screenshot
@@ -140,6 +141,9 @@ dumpt (`probe_out/`), ohne eine Beweissicherung zu erzeugen.
 - **Sortierung:** Wenn das Umstellen auf „Alle Kommentare" fehlschlägt, warnt
   das Skript — dann können von Facebook ausgeblendete Kommentare fehlen
   (`manifest.json: sorted_to_all_comments`).
+- **Nachladen:** Wenn `--max-rounds` erreicht ist, speichert fbsave die bereits
+  geladenen Beiträge und beendet den Lauf mit einem Fehlercode. Das Manifest
+  enthält dann `comment_loading_finished: false`.
 - Auch bei Fehlern/Abbruch (Strg-C) werden CSV, JSON und Manifest mit den bis dahin
   gesammelten Daten geschrieben.
 - Facebook ändert sein Markup regelmäßig. Wenn ein Lauf 0 Kommentare liefert:

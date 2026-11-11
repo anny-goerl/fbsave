@@ -8,7 +8,23 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from fbsave import CSV_FIELDS, build_comment_tree, write_outputs
+from fbsave import CSV_FIELDS, SORT_TARGET_RE, build_comment_tree, sort_title, write_outputs
+
+
+class CommentSortTest(unittest.TestCase):
+    def test_sort_target_matches_the_title_only(self):
+        for newest, all_comments, expected in (
+            ("Neueste zuerst\nAlle Kommentare anzeigen, die neuesten zuerst.",
+             "Alle Kommentare\ufeff\nAlle Kommentare anzeigen, auch potenziellen Spam.",
+             "Alle Kommentare"),
+            ("Newest\nShow all comments, newest first.",
+             "All comments\ufeff\nShow all comments, including potential spam.",
+             "All comments"),
+        ):
+            with self.subTest(title=expected):
+                titles = [sort_title(option) for option in (newest, all_comments)]
+                self.assertEqual([title for title in titles if SORT_TARGET_RE.fullmatch(title)],
+                                 [expected])
 
 
 class WriteOutputsTest(unittest.TestCase):
