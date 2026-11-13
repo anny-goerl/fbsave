@@ -592,7 +592,9 @@ def find_sort_button(scope):
         const title = new RegExp(pattern, 'i');
         const buttons = [...el.querySelectorAll('button, [role="button"]')];
         const matches = buttons.filter(b => b.getClientRects().length &&
-            title.test((b.innerText || '').trim().replace(/\s+/g, ' ')));
+            // Nur die erste Zeile ist der Titel, wie in sort_title().
+            title.test((b.innerText || '').split('\n')[0].replace(/\ufeff/g, '')
+                .trim().replace(/\s+/g, ' ')));
         return matches.find(b => b.getAttribute('aria-haspopup') === 'menu')
             || matches[0] || null;
     }""", SORT_BUTTON_RE).as_element()
@@ -675,6 +677,10 @@ def expand_everything(page, stepper: Stepper, drain, max_rounds: int) -> bool:
                 stepper.step(page, f"auffalten_runde_{round_no}")
             continue
         # Erst nach dem letzten Scrollversuch nochmals nach Buttons suchen.
+        if idle >= 3 and visible < 0:
+            ui.warn("Kommentare konnten nicht gezählt werden — unklar, ob "
+                    "alles nachgeladen wurde!")
+            return False
         if idle >= 3:
             ui.done(f"Keine weiteren Kommentare nachgeladen — {visible} "
                     f"Kommentar-Elemente sichtbar ({round_no - 1} Runden)")
@@ -853,8 +859,11 @@ def build_comment_tree(rows) -> list:
             continue
 
         # Der Link kann auf den Hauptkommentar zeigen, das Label auf eine Antwort.
+        # parse_aria() kann bei "auf Andreas Kommentar" das Genitiv-s mit
+        # abschneiden ("Andrea"), daher ein fehlendes "s" am Ende tolerieren.
         parent_author = node["parent_author"].rstrip("'’")
-        if parent_author and parent_author != parent["author"].rstrip("'’"):
+        author = parent["author"].rstrip("'’")
+        if parent_author and author not in (parent_author, parent_author + "s"):
             roots.append(node)
             continue
 
