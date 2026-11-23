@@ -1,0 +1,29 @@
+<!doctype html><meta charset="utf-8">
+<div role="row" data-message-id="sidebar-secret" aria-label="Um 16. Oktober 2026, 09:00, Andere: Nicht exportieren">Sidebar</div>
+<div style="height:220px;overflow-y:auto">
+  <div data-scope="messages_table">
+    <div aria-label="Um 16. Oktober 2026, 11:53, Du: Hallo: Welt">
+      <div role="row" data-message-id="m1"><span>Hallo: Welt</span>
+        <button aria-label="Eingabe, Nachricht gesendet: Hallo: Welt">Aktion</button>
+      </div>
+    </div>
+    <div role="row" data-message-id="m1-echo" aria-label="Eingabe, Nachricht gesendet: Hallo: Welt"></div>
+    <div role="row" data-mid="m2" aria-label="Um 16. Oktober 2026, 11:54, Alex: Mehrzeilig
+zweite Zeile"><span data-message-text>Mehrzeilig
+zweite Zeile</span></div>
+    <div role="row" data-message-id="m3" data-sender="Sam" data-timestamp="1792144500000">
+      <span data-message-text>Metadaten</span>
+      <img alt="Foto" src="https://scontent.example.fbcdn.net/photo">
+      <img alt="Profilbild: Sam" src="https://scontent.example.fbcdn.net/avatar">
+      <a download="datei.pdf" href="https://cdn.fbsbx.com/file">Download</a>
+    </div>
+    <div role="row" aria-label="Um 16. Oktober 2026, 11:56, Alex: doppelt">doppelt</div>
+    <div role="row" aria-label="Um 16. Oktober 2026, 11:56, Alex: doppelt">doppelt</div>
+    <div role="row" data-message-id="unknown">Unbekanntes Zeitformat</div>
+  </div>
+</div>
+<script>
+  window.actions = 0;
+  document.addEventListener('click', () => window.actions++);
+  document.addEventListener('input', () => window.actions++);
+</script>

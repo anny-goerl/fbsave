@@ -1,0 +1,33 @@
+<!doctype html><meta charset="utf-8">
+<div id="scroller" style="height:200px;overflow-y:auto;overflow-anchor:none">
+  <div data-scope="messages_table" style="height:960px;position:relative"></div>
+</div>
+<script>
+  const scroller = document.getElementById('scroller');
+  const table = document.querySelector('[data-scope="messages_table"]');
+  let timer;
+  window.rendered = [];
+  window.delay = 60;
+  function render() {
+    const first = Math.max(0, Math.floor(scroller.scrollTop / 80) - 1);
+    const ids = Array.from({length: Math.min(5, 12-first)}, (_, i) => first+i);
+    window.rendered.push(ids);
+    table.replaceChildren(...ids.map(i => {
+      const r = document.createElement('div');
+      r.setAttribute('role', 'row');
+      r.dataset.messageId = 'virtual-' + i;
+      r.setAttribute('aria-label', 'Um 16. Oktober 2026, 11:' + String(i).padStart(2, '0') + ', Alex: Nachricht ' + i);
+      r.textContent = 'Nachricht ' + i;
+      r.style.cssText = `position:absolute;top:${i*80}px;height:80px`;
+      return r;
+    }));
+    table.removeAttribute('aria-busy');
+  }
+  scroller.addEventListener('scroll', () => {
+    table.setAttribute('aria-busy', 'true');
+    clearTimeout(timer);
+    timer = setTimeout(render, window.delay);
+  });
+  scroller.scrollTop = 760;
+  render();
+</script>

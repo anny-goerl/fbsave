@@ -1,6 +1,7 @@
 # Capture-Ergebnisse (Beweismaterial gehoert nicht ins Repo)
 captures/
 captures_test/
+messenger_exports/
 
 # Diagnose-Ausgaben
 probe_out/

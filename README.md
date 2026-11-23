@@ -1,5 +1,8 @@
 # fbsave — Beweissicherung von Facebook-Kommentaren
 
+Zusätzlich steht ein unabhängiger, wiederaufnehmbarer **Messenger-Exporter**
+für genau einen ausdrücklich angegebenen Chat zur Verfügung (siehe unten).
+
 Dokumentiert alle Kommentare (inkl. Antworten und Antworten auf Antworten)
 unter einem öffentlichen Facebook-Post für eine Strafanzeige: Einzel-Screenshot
 pro Kommentar, Gesamt-Screenshot, CSV und JSON mit Autor/Profillink/Zeitstempel/Text
@@ -150,3 +153,204 @@ dumpt (`probe_out/`), ohne eine Beweissicherung zu erzeugen.
   mit `--debug` erneut laufen lassen — `debug_structure_*.json` und die
   HTML-Dumps zeigen, welche aria-Labels und Button-Texte aktuell verwendet
   werden.
+
+## Messenger: einen Chat lokal archivieren
+
+```bash
+# Session wie oben manuell speichern; keine Anmeldung/Zugangskontrolle umgehen.
+uv run save_login.py
+
+# Zuerst nur Text und Anhang-Metadaten, sichtbarer Browser:
+uv run fbsave.py messenger \
+  --url "https://www.facebook.com/messages/t/CHAT_ID" \
+  --output messenger_exports/mein-chat --no-media
+
+# Fortsetzen, erneut den Verlauf durchlaufen und Medien nachholen:
+uv run fbsave.py messenger \
+  --url "https://www.facebook.com/messages/t/CHAT_ID" \
+  --output messenger_exports/mein-chat --resume
+```
+
+Ohne `--no-media` werden direkt verfügbare Anhänge sofort nach jeder Laderunde
+gesichert. Unterstützt werden explizite HTTPS-Thread-URLs mit
+`facebook.com/messages/t/ID`, `facebook.com/messages/e2ee/t/ID`,
+`messenger.com/t/ID` und `messenger.com/e2ee/t/ID`. Query und Fragment werden
+verworfen. Der Modus benötigt eine vorhandene `state.json`; mit `--state DATEI`
+kann eine andere Session gewählt werden. Bei fehlender/abgelaufener Session,
+fehlendem Zugriff, Login-/PIN-/Captcha-Sperren oder unbekanntem DOM wird
+abgebrochen und das bisherige Archiv erhalten. Die Freigabe verschlüsselter
+Nachrichten muss der Benutzer gegebenenfalls manuell im regulären Messenger
+erledigen. `state.json` allein kann für E2EE-Verläufe unzureichend sein.
+
+Weitere Optionen:
+
+| Option | Bedeutung |
+|---|---|
+| `--headless` | Unsichtbares Chromium (Standard: sichtbar) |
+| `--max-rounds 2000` | Globales Limit der Scrollrunden pro Lauf |
+| `--idle-seconds 15` | Mindest-Ruhezeit an jeder Scrollgrenze; bei langsamem Laden erhöhen |
+| `--poll-ms 250` | Abstand zwischen Journal-Abfragen; vier Abfragen pro Scrollrunde |
+| `--max-media-mb 50` | Maximale gespeicherte Größe eines Anhangs in MiB |
+| `--debug` | Ausschließlich Anzahl, Laderunden und Status; keine Nachrichten oder DOM-Dumps |
+
+Der Kommentar-Modus mit seinen bisherigen Argumenten und Debug-Dateien bleibt
+unverändert. `messenger` muss direkt hinter `fbsave.py` stehen. Python ≥ 3.9,
+Playwright ≥ 1.45 und installiertes Chromium sind erforderlich. Anders als der
+Kommentar-Modus lädt Messenger Chromium nicht automatisch nach:
+`uv run --with playwright python -m playwright install chromium`.
+Die Archiv-Dateisperre nutzt `fcntl` (macOS/Linux; Windows wird derzeit nicht
+unterstützt).
+
+### Erfassung, Vollständigkeit und Wiederaufnahme
+
+Der Sammler liest ausschließlich `role="row"` innerhalb genau eines
+`data-scope="messages_table"` auf der angegebenen Thread-URL. Er liest keine
+Chatliste aus, navigiert nicht in andere Chats und bricht bei mehreren
+Nachrichtenlisten ab. Ein vor dem Seitenstart installierter
+[MutationObserver über Playwright](https://playwright.dev/python/docs/api/class-browsercontext#browser-context-add-init-script)
+sammelt auch entfernte Zeilen virtualisierter Listen. Der Export scrollt mit
+überlappenden Schritten zuerst nach oben, dann nach unten und fragt laufend
+nach Änderungen. Er klickt keine Buttons, fokussiert keinen Editor und löst
+keine Nachrichtenaktionen aus. Es werden keine privaten Messenger-APIs oder
+GraphQL-Endpunkte angesprochen.
+
+Beobachtungen werden als JSONL mit `flush`/`fsync` gesichert, bevor der
+Browserpuffer bestätigt wird. Strg-C und SIGTERM erzeugen JSON, CSV und Manifest
+aus den bis dahin gesicherten Daten. Bei SIGKILL/Stromausfall bleibt das Journal
+Wiederherstellungsquelle; eine unvollständige letzte Zeile darf beim Fortsetzen
+entfernt werden. Bereits vollständig geschriebene, beschädigte Zeilen führen
+zum Abbruch. Noch ausschließlich im Browserpuffer befindliche Beobachtungen
+können bei einem harten Prozessabbruch verloren gehen. Der Puffer ist begrenzt;
+ein erkannter Überlauf führt zu einem Fehler statt zu einer Erfolgsmeldung.
+
+`--resume` ist für einen vorhandenen Ausgabeordner erforderlich und überprüft
+Chat-ID und Formatversion. Pro Ordner darf nur ein Exporter schreiben.
+Die Wiederaufnahme liest das Journal ein und durchläuft den Chat **erneut**,
+da DOM-Scrollpositionen keine stabilen Server-Cursor sind. Alte Nachrichten
+bleiben erhalten, auch wenn sie im neuen Lauf fehlen. Änderungen unter
+derselben Nachrichten-ID werden mit vorherigem Text und Anhangsmetadaten in
+`revisions` erhalten;
+das ist eine Beobachtungshistorie, keine von Messenger bestätigte Edit-Historie.
+Der Checkpoint speichert die Laufparameter und Ladegrenzen, nicht die Session.
+
+Exitcodes: `0` = beide Scrollgrenzen ohne beobachtete Änderungen erreicht,
+`2` = Rundenlimit oder leerer, nicht verifizierter Verlauf, `1` = Fehler,
+`130` = unterbrochen. Auch Exitcode 0 garantiert keine Vollständigkeit.
+`manifest.json: completeness` bleibt immer `unverified`. `top_stable`,
+`bottom_stable`, Status, Runden, Parser- und Anhangszähler dokumentieren die
+beobachtete Abdeckung. Nachladevorgänge, die länger als die gewählte Ruhezeit
+dauern, können fehlen. Höhere Limits und ein zweiter Lauf helfen bei der
+Plausibilitätsprüfung, beweisen aber keine vollständige Historie.
+
+### Identität, Zeitstempel und Ausgabe
+
+Nachrichten-IDs werden aus `data-message-id`, `data-mid` oder einem
+Nachrichten-Permalink desselben Chats bevorzugt. `id_source` dokumentiert die
+Quelle. Fehlt eine ID, wird SHA-256 aus Absender, verfügbarem Zeitwert, Text und
+Anhangsbeschreibung gebildet; eine laufende Vorkommensnummer innerhalb eines
+DOM-Snapshots erhält gleichzeitig sichtbare identische Nachrichten.
+**Identische Nachrichten in verschiedenen virtuellen Ausschnitten können
+zusammenfallen.** Wechselnde Metadaten oder später sichtbare IDs können
+umgekehrt Duplikate erzeugen. Der Fallback ist keine verlässliche Messenger-ID;
+`deduplication` und `fallback_count` machen seine Verwendung sichtbar.
+
+Datum, Uhrzeit, Absender und Text werden aus expliziten deutschen/englischen
+ARIA-Labels (z. B. `Um 16. Oktober 2026, 11:53, Du: ...`) oder vorhandenen
+DOM-Metadaten gelesen. Labels wie `Eingabe, Nachricht gesendet: ...` gelten
+als Hilfslabels, nicht als zusätzliche Nachricht. Nicht interpretierbare
+Zeilen bleiben als `parse_status: unparsed` mit beobachtetem Text erhalten.
+ARIA-Zeiten enthalten keine gesicherte Zeitzone: `timestamp_local` bleibt ohne
+Offset und `timestamp_utc` leer. Nur explizite Epoch-/Offset-Metadaten erlauben
+eine UTC-Zuordnung. Es wird kein Jahr und keine Zeitzone geraten. Die Ausgabe
+sortiert nach verfügbaren Zeitwerten; bei unbekannten oder gemischten Zeitzonen
+ist die Reihenfolge nur eine Anzeigehilfe. Die Journalreihenfolge ist die
+Beobachtungsreihenfolge, keine behauptete Nachrichtenchronologie.
+
+| Datei | Inhalt |
+|---|---|
+| `messages.jsonl` | Fortlaufendes Journal der neuen/geänderten Datensätze einschließlich Medienstatus |
+| `checkpoint.json` | Chat-Bindung, Formatversion, Laufparameter, Unterbrechungs- und Ladezustand |
+| `messages.json` | Zusammengeführte Nachrichten, Rohlabel, Identitätsquelle, Anhänge und Revisionen |
+| `messages.csv` | UTF-8-BOM; Datum, Uhrzeit, Absender, Text, IDs und JSON-Anhangsliste |
+| `media/<SHA256>.bin` | Lokal gesicherte Anhangsbytes, Dateiname aus Inhalts-Hash |
+| `manifest.json` | Laufhistorie, Abdeckungsgrenzen, Zähler, Größe und SHA-256 der Archivdateien |
+
+CSV-Felder, die als Tabellenformeln interpretiert werden könnten, erhalten ein
+führendes Apostroph. JSON/JSONL erhalten den Originaltext. Das Manifest hasht
+die verwalteten Ausgabedateien und alle erzeugten Hash-Mediendateien, auch
+frühere Anhangsversionen; es hasht sich selbst
+nicht. `.export.lock` ist eine technische Sperrdatei. Die Einzeldateien werden
+atomar ersetzt; das Dateiset als Ganzes ist keine Transaktion. Nach einem
+Abbruch mit `--resume` neu erzeugen. Hashes erkennen spätere Veränderungen,
+belegen aber weder Urheberschaft noch die Vollständigkeit oder Authentizität
+des Facebook-Verlaufs. Nach Abschluss eine unveränderte Archivkopie anlegen.
+
+### Medien, nicht verifizierte Annahmen und Datenschutz
+
+Die Struktur `messages_table`/`role=row` und das deutsche ARIA-Beispiel basieren
+auf den bereitgestellten Angaben von November 2026. **Es wurde kein Live-Chat
+zur Verifikation geöffnet.** Weitere ID-/Text-/Sender-/Zeit-Attribute,
+englische Labels und E2EE-URL-Varianten sind vorsichtige, synthetisch getestete
+Annahmen und müssen bei DOM-Änderungen angepasst werden. Eine einzelne
+Nachrichtenliste unter der passenden URL wird als der angegebene Chat
+interpretiert; eine zusätzliche unabhängige Chat-ID im DOM wird nicht geprüft.
+
+Medienkandidaten sind `img`, `video`, `audio`, `source` sowie als Download/Anhang
+ausgezeichnete Links innerhalb der Nachrichtenzeilen. Bekannte Avatar- und
+Emoji-Labels werden ausgefiltert; das ist eine Heuristik. Gesichert werden
+direkte HTTPS-Quellen unter `fbcdn.net`/`fbsbx.com` und gleichursprüngliche
+`blob:`-URLs. Für CDN-GETs wird der
+[Request-Kontext der Browser-Session](https://playwright.dev/python/docs/api/class-apirequestcontext)
+genutzt. Redirects werden einzeln geprüft; fremde Hosts, Facebook-Seitenlinks
+und externe Linkvorschauen werden nicht heruntergeladen. Quellen, Fehlstatus,
+lokale Pfade und Hashes stehen am Anhang. Fehlgeschlagene Quellen werden pro
+Lauf einmal und bei Wiederaufnahme erneut versucht. Vorhandene Dateien werden
+vor Wiederverwendung anhand ihres Hashes geprüft.
+
+Originaldateien, volle Bildauflösung, nur nach Klick verfügbare Downloads,
+abgelaufene URLs, Playlists/Streamsegmente, Lazy-Loading, Sticker und
+verschlüsselte Anhänge können fehlen oder nur als Vorschau vorliegen.
+Blob-URLs lassen sich nach einem Neustart häufig nicht erneut abrufen.
+`.bin` erhält die Bytes ohne Ausführung oder Inhaltsinterpretation; der
+ursprüngliche Downloadname bleibt als Metadatum erhalten. Das Größenlimit
+begrenzt die gespeicherten Bytes, **nicht** zuverlässig Netzwerkverbrauch oder
+Spitzenspeicher: Playwright puffert Antworten bereits beim GET. Es gibt keine
+Zusage für sehr große Verläufe; zusammengeführte Daten und Projektionen liegen
+im Arbeitsspeicher, das Journal wächst mit Beobachtungsänderungen.
+
+**Schon das Öffnen oder Scrollen eines Chats kann automatische
+Lesebestätigungen, Präsenz- oder andere serverseitige Effekte auslösen.**
+Diese werden nicht aktiv ausgelöst, aber auch nicht durch Eingriffe in das
+Messenger-Protokoll blockiert. Wer garantiert keine Lesebestätigung auslösen
+darf, sollte diesen DOM-Exporter nicht mit einer Live-Session öffnen.
+
+Nur Chats archivieren, auf die das angemeldete Konto regulär Zugriff hat und
+für deren Speicherung eine Berechtigung besteht. Es werden weder Captchas noch
+PINs, Login-, E2EE- oder andere Zugangskontrollen umgangen. Das Archiv enthält
+private Nachrichten, Teilnehmernamen und möglicherweise signierte, zeitweise
+zugriffsfähige Medien-URLs. Geschützt lokal aufbewahren, Zugriff und
+Aufbewahrungsdauer begrenzen, bei Bedarf Datenträgerverschlüsselung verwenden
+und nicht ungeprüft teilen. Neue Ausgabeordner werden mit restriktiven
+Verzeichnisrechten angelegt; vorhandene Ordner behalten ihre Rechte.
+`messenger_exports/` und `state.json` sind in `.gitignore`; für andere
+Ausgabeorte selbst auf den Ausschluss achten. Session-Cookies werden nicht ins
+Archiv kopiert. Messenger-Debug-Ausgaben enthalten ausschließlich Zähler und
+feste Statusmeldungen, keine Cookies, Zugangsdaten, Nachrichten, URLs,
+Screenshots oder HTML-Dumps. Extern aktiviertes Playwright-Protokoll-Logging
+oder fremde Diagnosewerkzeuge gehören nicht zu dieser Debug-Funktion.
+
+### Tests
+
+```bash
+python3 -m unittest -v test_fbsave  # bestehender Kommentar-Exporter
+uv run --with playwright python -m playwright install chromium
+uv run --with playwright python -m unittest -v test_messenger
+```
+
+Die neuen Tests verwenden nur synthetische Daten, lokal beantwortete
+Browseranfragen und keine echte Facebook-Session. Sie prüfen ARIA/Metadaten,
+Hilfslabels, beide Scrollrichtungen einer virtualisierten Liste, verzögertes
+Nachladen, entfernte Zeilen, Rundenlimit, Unterbrechung, Wiederaufnahme,
+Deduplizierung, Medien- und Redirect-Regeln, Hashes sowie logfreie private
+Inhalte. Ohne installiertes Playwright werden Browser-Fixtures übersprungen;
+in CI wird Playwright mit Chromium installiert und vollständig ausgeführt.

@@ -1098,6 +1098,10 @@ def run(args) -> int:
 
 
 def main() -> int:
+    # Keep the established comment CLI and processing path intact.
+    if len(sys.argv) > 1 and sys.argv[1] == "messenger":
+        from messenger import main as messenger_main
+        return messenger_main(sys.argv[2:])
     global ui
     ap = argparse.ArgumentParser(
         description="Dokumentiert alle Kommentare unter einem oeffentlichen "
